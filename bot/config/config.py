@@ -28,5 +28,7 @@ class Settings(BaseSettings):
 
     USE_RANDOM_USERAGENT: bool = False
 
+    TAP_UNTIL_PROFIT: int = 1_000_000
+
 
 settings = Settings()

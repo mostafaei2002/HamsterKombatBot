@@ -248,23 +248,26 @@ class Tapper:
                             logger.success(
                                 f'{self.session_name} | Successfully selected exchange <ly>Bybit</ly>'
                             )
+                
+                if earn_on_hour < settings.TAP_UNTIL_PROFIT:
+                    taps = randint(
+                        a=settings.RANDOM_TAPS_COUNT[0],
+                        b=settings.RANDOM_TAPS_COUNT[1],
+                    )
 
-                taps = randint(
-                    a=settings.RANDOM_TAPS_COUNT[0],
-                    b=settings.RANDOM_TAPS_COUNT[1],
-                )
+                    if active_turbo:
+                        taps += settings.ADD_TAPS_ON_TURBO
+                        if time() - turbo_time > 20:
+                            active_turbo = False
+                            turbo_time = 0
 
-                if active_turbo:
-                    taps += settings.ADD_TAPS_ON_TURBO
-                    if time() - turbo_time > 20:
-                        active_turbo = False
-                        turbo_time = 0
-
-                player_data = await send_taps(
-                    http_client=http_client,
-                    available_energy=available_energy,
-                    taps=taps,
-                )
+                    player_data = await send_taps(
+                        http_client=http_client,
+                        available_energy=available_energy,
+                        taps=taps,
+                    )
+                else:
+                    player_data = await get_profile_data(http_client=http_client)
 
                 if not player_data:
                     continue
@@ -276,10 +279,15 @@ class Tapper:
                 total = int(player_data.get('totalCoins', 0))
                 earn_on_hour = player_data['earnPassivePerHour']
 
-                logger.success(
-                    f'{self.session_name} | Successful tapped! | '
-                    f'Balance: <c>{balance:,}</c> (<lg>+{calc_taps:,}</lg>) | Total: <le>{total:,}</le>'
-                )
+
+                if earn_on_hour < settings.TAP_UNTIL_PROFIT:
+                    logger.success(
+                        f'{self.session_name} | Successful tapped! | '
+                        f'Balance: <c>{balance:,}</c> (<lg>+{calc_taps:,}</lg>) | Total: <le>{total:,}</le>'
+                    )
+                else:
+                    logger.success(f"{self.session_name} | Taps skipped! | Profit {earn_on_hour} is already larger than {settings.TAP_UNTIL_PROFIT}")
+                    
 
                 if active_turbo is False:
                     if settings.AUTO_UPGRADE is True:
@@ -352,7 +360,7 @@ class Tapper:
 
                                 continue
 
-                    if available_energy < settings.MIN_AVAILABLE_ENERGY:
+                    if available_energy < settings.MIN_AVAILABLE_ENERGY and earn_on_hour < settings.TAP_UNTIL_PROFIT:
                         boosts = await get_boosts(http_client=http_client)
                         energy_boost = next(
                             (
@@ -407,6 +415,26 @@ class Tapper:
                         await asyncio.sleep(delay=random_sleep)
 
                         access_token_created_time = 0
+                    elif earn_on_hour > settings.TAP_UNTIL_PROFIT:
+
+                        await http_client.close()
+                        if proxy_conn:
+                            if not proxy_conn.closed:
+                                proxy_conn.close()
+                        
+                        random_sleep = randint(
+                            settings.SLEEP_BY_MIN_ENERGY[0],
+                            settings.SLEEP_BY_MIN_ENERGY[1],
+                        )
+
+                        logger.info(
+                            f'{self.session_name} | Sleep {random_sleep:,}s'
+                        )
+
+                        await asyncio.sleep(delay=random_sleep)
+
+                        access_token_created_time = 0
+                        
 
             except InvalidSession as error:
                 raise error
